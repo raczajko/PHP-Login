@@ -1,17 +1,20 @@
 PHP-Login
 =========
 
-A simple, secure login and signup system with PHP, MySQL and jQuery (AJAX) using Bootstrap 3 for the form design as well as PHP-Mailer for user account verification and confirmation
+Ajuste del excelente trabajo de -> https://github.com/fethica/PHP-Login para tener un template 'estandar'.
+
+Sistema simple y seguro de registro e inicio de sesión con PHP, JQuery (AJAX) y MySQL o PostgreSQL (a eleccion, leer mas abajo) usando Bootstrap 3 para el diseño de formularios así como PHP-Mailer para la verificación y confirmación de la cuenta del usuario.
 
 <img src="https://raw.githubusercontent.com/fethica/PHP-Login/master/login/images/screenshot.png" alt="Login Page Screenshot" />
 
-## Installation
-### Clone the Repository (recursively to include PHP-Mailer submodule)
+## Instalación
+
+### Clonamos el repositorio (de manera recursiva a fin de incluir el submodulo de PHP-Mailer)
     $ git clone --recursive https://github.com/fethica/PHP-Login.git
 
-### Creating the MySQL Database
+### LOGIN Base MySQL - Creacion BD
 
-Create database "login" and create tables "members" and "loginAttempts" :
+Crear la base de datos "login" y crear las tablas "members" y "loginAttempts" :
 
 ```sql
 CREATE TABLE `members` (
@@ -36,31 +39,107 @@ CREATE TABLE `loginAttempts` (
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 ```
-### Setup the `login/dbconf.php` file
+
+### LOGIN Base PostgreSQL - Creacion BD
+
+Crear la base de datos "login" y crear las tablas "members" y "loginAttempts" :
+
+```sql
+CREATE TABLE members
+(
+  username character varying(65) NOT NULL DEFAULT ''::character varying,
+  password character varying(65) NOT NULL DEFAULT ''::character varying,
+  email character varying(65) NOT NULL,
+  verified smallint NOT NULL DEFAULT 0,
+  mod_timestamp timestamp without time zone NOT NULL DEFAULT now(),
+  id character(23) NOT NULL,
+  CONSTRAINT id PRIMARY KEY (id, username, email)
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE members
+  OWNER TO postgres;
+
+CREATE TABLE loginattempts
+(
+  ip character varying(20) NOT NULL,
+  attempts numeric(11,0) NOT NULL,
+  lastlogin timestamp without time zone NOT NULL,
+  username character varying(65) DEFAULT NULL::character varying,
+  id integer NOT NULL DEFAULT nextval('loginattempts_id_seq'::regclass),
+  CONSTRAINT "ID" PRIMARY KEY (id)
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE loginattempts
+  OWNER TO postgres;
+```
+<i>En el archivo login/includes/dbconn.php, reeemplazar la linea 19 de:</i>
+
+```php
+$this->conn = new PDO('mysql:host=' . $host . ';dbname=' . $db_name . ';charset=utf8', $username, $password);
+```
+por
+
+```php
+$this->conn = new PDO('pgsql:host='.$host.';dbname='.$db_name.';user='.$username.';password='.$password);
+```
+
+
+### Configuramos la DB en el archivo `login/dbconf.php`
 ```php
 <?php
-    //DATABASE CONNECTION VARIABLES
-    $host = "localhost"; // Host name
-    $username = "user"; // Mysql username
-    $password = "password"; // Mysql password
-    $db_name = "login"; // Database name
+    //Variables de Conexion a la Base de Datos
+    $host = "localhost"; // Equipo
+    $username = "user"; // Usuario MySql/PostgreSQL
+    $password = "password"; // Password MySql/PostgreSQL
+    $db_name = "login"; // Nombre de la BD
 
 ```
 
-### Setup the `login/config.php` file
-<i>Read code comments for a description of each variable</i>
+### Poner este codigo (de `index.php`) en la cabecera de cada pagina, o crear un archivo/template y hacer el correspondiente require_once :
+> *** **Importante** *** Verifica si la variable de sesion usuario en $_SESSION fue establecida. Sino, redirige a la pagina de LOGIN. 
+
+```php
+<?php require "login/loginheader.php"; ?>
+```
+
+### Verificacion del Usuario y Contraseña usando jQuery (Ajax) :
+
+Si el usuario ingresa el usuario y contraseña correcto, entonces `checklogin.php` envia como respuesta 'true', registra el usuario y contraseña en una sesion, y lo redirige a `index.php`
+Si el usuario y/o contraseña son incorrectos, entonces  ´checklogin.php´ rsponde con "Usuario o contraseña incorrecta".
+
+
+### Workflow de Registro/Login:
+> 1) Creacion del nuevo usuario usando el formulario `signup.php`
+> (nota: la validación ocurre tanto en el cliente como de lado del servidor)
+> &nbsp;&nbsp;&nbsp;&nbsp;<b>La validación requiere: </b>
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Contraseñas iguales de almenos 4 caracteres de largo
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Direccion de email válida
+> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Usuario no existente
+> 2) La conntraseña se hashea y un nuevo GUID es generado para el ID de Usuario
+> 3) Se agrega el usuario a la base de datos como 'no verificado'
+> 4) Se envia un correo al email registrado (o al correo del MODERADOR $admin_email si se establecio) con un enlace de validación
+> 5) El usuario (o MODERADOR) hace click en el enlace de verificacion que lo envia a `verifyuser.php` y verifica el usuario en la base de datos
+> 6) El usuario verificado ya puede iniciar sesion
+
+
+### Configuramos variables globales en el archivo `login/config.php`
+<i>Leer los comentarios en el codigo para una descripcion de cada variable</i>
 
 ```php
 <?php
-    //Set this for global site use
+    //Variable global con el nombre del sitio
     $site_name = 'Test Site';
 
-    //Maximum Login Attempts
+    //Maximo de intentos de Login, despues inhabilita el usuario segun el tiempo definido
     $max_attempts = 5;
-    //Timeout (in seconds) after max attempts are reached
+    //Tiempo punitorio (en segundos) para el usuario que haya alcanzado el maximo numero de intentos de Login
     $login_timeout = 300;
 
-    //ONLY set this if you want a moderator to verify users and not the users themselves, otherwise leave blank or comment out
+    //Correo del MODERADOR, sino dejar en blanco o comentar la linea
     $admin_email = '';
 
     //EMAIL SETTINGS
@@ -86,28 +165,3 @@ CREATE TABLE `loginAttempts` (
 
     //IGNORE CODE BELOW THIS
 ```
-### Place this code (from `index.php`) at the head of each page :
-> *** **Important** *** Checks to see if username $_SESSION variable is set. If not set, redirects to login page. 
-
-```php
-<?php require "login/loginheader.php"; ?>
-```
-
-### Check the Username and the Password using jQuery (Ajax) :
-
-If the user has the right username and password, then the `checklogin.php` will send 'true', register the username and the password in a session, and redirect to `index.php`.
-If the username and/or the password are wrong the `checklogin.php` will send "Wrong Username or Password".
-
-
-### Signup/Login Workflow:
-> 1) Create new user using `signup.php` form
-> (note: validation occurs both client and server side)
-> &nbsp;&nbsp;&nbsp;&nbsp;<b>Validation requires: </b>
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Passwords to match and be at least 4 characters
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Valid email address
-> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - Unique username
-> 2) Password gets hashed and new GUID is generated for User ID
-> 3) User gets added to database as unverified
-> 4) Email is sent to user email (or $admin_email if set) with verification link
-> 5) User (or admin) clicks verification link which sends them to `verifyuser.php` and verifies user in the database
-> 6) Verified user may now log in
