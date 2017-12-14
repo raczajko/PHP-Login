@@ -60,6 +60,18 @@ WITH (
 );
 ALTER TABLE members
   OWNER TO postgres;
+  
+  
+CREATE SEQUENCE public.loginattempts_id_seq
+    INCREMENT 1
+    START 210
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    CACHE 1;
+
+ALTER SEQUENCE public.loginattempts_id_seq
+    OWNER TO postgres;  
+  
 
 CREATE TABLE loginattempts
 (
